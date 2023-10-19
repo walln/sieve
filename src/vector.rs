@@ -1,3 +1,5 @@
+use rand::Rng;
+
 #[derive(Copy, Clone, Debug)]
 pub struct Vector<const N: usize> {
     values: [f32; N],
@@ -5,6 +7,20 @@ pub struct Vector<const N: usize> {
 
 impl<const N: usize> Vector<N> {
     pub fn new(values: [f32; N]) -> Self {
+        Self { values }
+    }
+
+    pub fn random(lower_bound: Option<f32>, upper_bound: Option<f32>) -> Self {
+        let lower_bound = lower_bound.unwrap_or(-1.0);
+        let upper_bound = upper_bound.unwrap_or(1.0);
+        let mut rng = rand::thread_rng();
+        let values = (0..N)
+            // .map(|_| rng.gen_range(-1.0..1.0))
+            .map(|_| rng.gen_range(lower_bound..upper_bound))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
         Self { values }
     }
 
@@ -92,11 +108,32 @@ mod tests {
     }
 
     #[test]
+    fn test_rand() {
+        let a: Vector<1> = Vector::random(None, None);
+        assert_eq!(a.values.len(), 1, "Should have 1 value");
+        assert!(
+            a.values[0] >= -1.0,
+            "Should be greater than or equal to -1.0"
+        );
+        assert!(a.values[0] <= 1.0, "Should be less than or equal to 1.0");
+
+        let a: Vector<1> = Vector::random(Some(0.0), Some(2.0));
+        assert_eq!(a.values.len(), 1, "Should have 1 value");
+        assert!(a.values[0] >= 0.0, "Should be greater than or equal to 0.0");
+        assert!(a.values[0] <= 2.0, "Should be less than or equal to 2.0");
+    }
+
+    #[test]
     fn test_add() {
         let a = Vector::new([1.0, 2.0, 3.0]);
         let b = Vector::new([4.0, 5.0, 6.0]);
         let c = a.add(&b);
         assert_eq!(c.values, [5.0, 7.0, 9.0]);
+
+        let a = Vector::new([-1.0, -2.0, -3.0]);
+        let b = Vector::new([4.0, 5.0, 6.0]);
+        let c = a.add(&b);
+        assert_eq!(c.values, [3.0, 3.0, 3.0]);
     }
 
     #[test]
@@ -105,6 +142,11 @@ mod tests {
         let b = Vector::new([4.0, 5.0, 6.0]);
         let c = a.sub(&b);
         assert_eq!(c.values, [-3.0, -3.0, -3.0]);
+
+        let a = Vector::new([-1.0, -2.0, -3.0]);
+        let b = Vector::new([4.0, 5.0, 6.0]);
+        let c = a.sub(&b);
+        assert_eq!(c.values, [-5.0, -7.0, -9.0]);
     }
 
     #[test]
@@ -113,6 +155,11 @@ mod tests {
         let b = Vector::new([4.0, 5.0, 6.0]);
         let c = a.avg(&b);
         assert_eq!(c.values, [2.5, 3.5, 4.5]);
+
+        let a = Vector::new([-1.0, -2.0, -3.0]);
+        let b = Vector::new([4.0, 5.0, 6.0]);
+        let c = a.avg(&b);
+        assert_eq!(c.values, [1.5, 1.5, 1.5]);
     }
 
     #[test]
@@ -121,6 +168,24 @@ mod tests {
         let b = Vector::new([4.0, 5.0, 6.0]);
         let c = a.dot(&b);
         assert_eq!(c, 32.0);
+
+        let a = Vector::new([-1.0, -2.0, -3.0]);
+        let b = Vector::new([4.0, 5.0, 6.0]);
+        let c = a.dot(&b);
+        assert_eq!(c, -32.0);
+    }
+
+    #[test]
+    fn test_squared_euclidian_distance() {
+        let a: Vector<2> = Vector::new([1.0, 2.0]);
+        let b: Vector<2> = Vector::new([4.0, 6.0]);
+        let c = a.squared_euclidian_distance(&b);
+        assert_eq!(c, 25.0);
+
+        let a: Vector<2> = Vector::new([-1.0, -2.0]);
+        let b: Vector<2> = Vector::new([4.0, 6.0]);
+        let c = a.squared_euclidian_distance(&b);
+        assert_eq!(c, 89.0);
     }
 
     #[test]
