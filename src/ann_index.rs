@@ -9,6 +9,8 @@ use crate::tree::{InnerNode, LeafNode, TreeNode};
 use crate::vector::Vector;
 use rand::prelude::SliceRandom;
 
+/// A search result from an approximate nearest neighbors search
+/// Each result contains the vector id, the distance from the query vector, and the vector itself
 #[derive(Debug, Clone)]
 pub struct ApproximateNearestNeighborsSearchResult<const N: usize> {
     pub vector_id: i32,
@@ -16,6 +18,8 @@ pub struct ApproximateNearestNeighborsSearchResult<const N: usize> {
     pub vector: Vector<N>,
 }
 
+/// An index of vectors that can be searched for approximate nearest neighbors
+/// The index constructs an in-memory tree of the vectors, and searches the tree for the nearest neighbors
 pub struct ApproximateNearestNeighborsIndex<const N: usize> {
     vectors: Vec<Vector<N>>,
     ids: Vec<i32>,
@@ -23,6 +27,9 @@ pub struct ApproximateNearestNeighborsIndex<const N: usize> {
 }
 
 impl<const N: usize> ApproximateNearestNeighborsIndex<N> {
+    /// Build an index of vectors by constructing a tree of the vectors
+    /// The index will contain `num_trees` trees, each with a maximum of `max_size` vectors
+    /// The index will deduplicate vectors with the same hashkey
     pub fn build(
         num_trees: i32,
         max_size: i32,
@@ -33,7 +40,6 @@ impl<const N: usize> ApproximateNearestNeighborsIndex<N> {
         Self::deduplicate(vectors, vector_ids, &mut unique_vecs, &mut ids);
         let all_indexes: Vec<usize> = (0..unique_vecs.len()).collect();
 
-        // TODO: Use rayon iterator
         let trees = (0..num_trees)
             .into_par_iter()
             .map(|_| Self::build_tree(max_size, &all_indexes, &unique_vecs))
@@ -46,6 +52,42 @@ impl<const N: usize> ApproximateNearestNeighborsIndex<N> {
         }
     }
 
+    /// Search the index for the `top_k` approximate nearest neighbors of the `query` vector
+    /// Returns a vector of `ApproximateNearestNeighborsSearchResult` structs
+    /// The vector is sorted by distance from the query vector (ascending) and limited to `top_k` results
+    /// using the squared euclidian distance as the distance metric.
+    ///
+    /// NOTE:
+    /// Search is an approximate nearest neighbors search, and may not return the true nearest neighbors
+    /// The search is approximate because the index builds a tree of the vectors, and searches the tree
+    /// by constructing hyperplanes during the construction of the tree. The hyperplanes are constructed
+    /// based on the number and size of trees allowed. The hyperplanes are constructed by randomly
+    /// sampling vectors. Therefore the construction of a tree is not deterministic and for large indicies,
+    /// the search may not return the true nearest neighbors.
+    pub fn search(
+        &self,
+        query: Vector<N>,
+        top_k: i32,
+    ) -> Vec<ApproximateNearestNeighborsSearchResult<N>> {
+        let candidates = DashSet::new();
+        self.trees.par_iter().for_each(|tree| {
+            Self::query_tree(query, top_k, tree, &candidates);
+        });
+        candidates
+            .into_iter()
+            .map(|idx| (idx, self.vectors[idx].squared_euclidian_distance(&query)))
+            .sorted_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .take(top_k as usize)
+            .map(|(ids, dis)| ApproximateNearestNeighborsSearchResult {
+                vector_id: self.ids[ids],
+                distance: dis,
+                vector: self.vectors[ids],
+            })
+            .collect_vec()
+    }
+
+    /// Retrieve all vectors in the index, the id of the vector is its index within the returned Vec
+    /// since the index is immutable after construction, the id of a vector will not change
     pub fn all_vectors(&self) -> Vec<Vector<N>> {
         self.vectors.clone()
     }
@@ -68,6 +110,7 @@ impl<const N: usize> ApproximateNearestNeighborsIndex<N> {
         let sample: Vec<_> = indexes
             .choose_multiple(&mut rand::thread_rng(), 2)
             .collect();
+
         // cartesian eq for hyperplane n * (x - x_0) = 0
         // n (normal vector) is the coefs x_1 to x_n
         let (a, b) = (*sample[0], *sample[1]);
@@ -104,36 +147,12 @@ impl<const N: usize> ApproximateNearestNeighborsIndex<N> {
         }
     }
 
-    pub fn search(
-        &self,
-        query: Vector<N>,
-        top_k: i32,
-    ) -> Vec<ApproximateNearestNeighborsSearchResult<N>> {
-        let candidates = DashSet::new();
-        self.trees.par_iter().for_each(|tree| {
-            Self::query_tree(query, top_k, tree, &candidates);
-        });
-        candidates
-            .into_iter()
-            .map(|idx| (idx, self.vectors[idx].squared_euclidian_distance(&query)))
-            .sorted_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
-            .take(top_k as usize)
-            // .map(|(idx, dis)| (self.ids[idx], dis))
-            .map(|(ids, dis)| ApproximateNearestNeighborsSearchResult {
-                vector_id: self.ids[ids],
-                distance: dis,
-                vector: self.vectors[ids],
-            })
-            .collect_vec()
-    }
-
     fn query_tree(
         query: Vector<N>,
         n: i32,
         tree: &TreeNode<N>,
         candidates: &DashSet<usize>,
     ) -> i32 {
-        // take everything in node, if still needed, take from alternate subtree
         match tree {
             TreeNode::Leaf(box_leaf) => {
                 let leaf_values = &(box_leaf.value());
