@@ -1,5 +1,5 @@
-use ann::ann_index::ApproximateNearestNeighborsIndex;
-use ann::vector::Vector;
+use sieve::ann_index::ApproximateNearestNeighborsIndex;
+use sieve::vector::Vector;
 
 #[test]
 fn test_simple_index() {

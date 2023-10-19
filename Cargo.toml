@@ -1,7 +1,12 @@
 [package]
-name = "ann"
+name = "sieve"
 version = "0.1.0"
 edition = "2021"
+description = "Simple vector search engine"
+repository = "https://github.com/walln/sieve"
+keywords = ["vector", "index", "ann"]
+categories = ["science"]
+license = "MIT"
 
 [dependencies]
 dashmap = "5.5.3"
