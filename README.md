@@ -1,7 +1,7 @@
 # Sieve
 
 Sieve is a toy implementation of Approximate Nearest Neighbors search. This index works by building an in-memory
-tree of the vectorsm randomly selecting vectors during the construction of the index and creating hyperplanes to use to quickly search the vector space. Vectors can then be queried using squared euclidian distance to find similar vectors within the vector space.
+tree of the vectors randomly selecting vectors during the construction of the index and creating hyperplanes to use to quickly search the vector space. Vectors can then be queried using squared euclidian distance to find similar vectors within the vector space.
 
 To get started just install this crate and create an index.
 
